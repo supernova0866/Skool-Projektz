@@ -12,13 +12,38 @@ SAVE_FILE_PREFIX = "chess_games"
 MAX_GAMES = 10
 SQUARE_SIZE = 72
 BOARD_OFFSET = 40          # space for rank/file labels
+ANIM_STEPS = 10
+ANIM_DELAY = 12            # ms per animation frame
 
-LIGHT = "#F0D9B5"
-DARK  = "#B58863"
-HIGHLIGHT_VALID  = "#AAD651"   # green tint for valid moves
-HIGHLIGHT_SELECT = "#F6F669"   # yellow tint for selected piece
-HIGHLIGHT_CHECK  = "#FF4444"   # red for king in check
-HIGHLIGHT_LAST   = "#CDD26A"   # subtle last-move highlight
+# ── Palette (modern dark theme) ───────────────
+BG_APP       = "#0d0d17"
+BG_PANEL     = "#171726"
+BG_PANEL_ALT = "#1f1f33"
+BG_CARD      = "#1c1c2e"
+ACCENT       = "#e0b34c"
+ACCENT_HOVER = "#f0c766"
+ACCENT_DARK  = "#b8903a"
+TEXT_PRIMARY = "#f2f0e6"
+TEXT_MUTED   = "#8e8ea8"
+TEXT_DIM     = "#54546a"
+DANGER       = "#e2554f"
+DANGER_HOVER = "#ea6e69"
+
+LIGHT = "#eef0e3"
+DARK  = "#7c8f5f"
+HIGHLIGHT_VALID  = "#8fbf6b"
+HIGHLIGHT_SELECT = "#f5e37a"
+HIGHLIGHT_CHECK  = "#e2554f"
+HIGHLIGHT_LAST   = "#cdd26a"
+
+FONT_TITLE = ("Georgia", 34, "bold")
+FONT_SUB   = ("Segoe UI", 11)
+FONT_HEAD  = ("Segoe UI", 13, "bold")
+FONT_BODY  = ("Segoe UI", 11)
+FONT_SMALL = ("Segoe UI", 9)
+FONT_MONO  = ("Consolas", 10)
+PIECE_FONT = ("Segoe UI Symbol", 38)
+CAP_FONT   = ("Segoe UI Symbol", 15)
 
 UNICODE_PIECES = {
     ("white", "K"): "♔", ("white", "Q"): "♕",
@@ -29,8 +54,46 @@ UNICODE_PIECES = {
     ("black", "N"): "♞", ("black", "P"): "♟",
 }
 
+PIECE_VALUES = {"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 0}
+CAP_ORDER = {"Q": 0, "R": 1, "B": 2, "N": 3, "P": 4}
+
+
 # ─────────────────────────────────────────────
-#  CHESS LOGIC
+#  UI HELPERS
+# ─────────────────────────────────────────────
+def make_button(parent, text, command, bg=ACCENT, fg=BG_APP, hover_bg=None,
+                 font=FONT_BODY, padx=16, pady=9, width=None, state=tk.NORMAL):
+    """A flat button with a hover-brighten effect."""
+    hover_bg = hover_bg or ACCENT_HOVER
+    btn = tk.Button(parent, text=text, command=command, bg=bg, fg=fg,
+                     activebackground=hover_bg, activeforeground=fg,
+                     font=font, bd=0, padx=padx, pady=pady, cursor="hand2",
+                     highlightthickness=0, relief="flat", state=state)
+    if width:
+        btn.config(width=width)
+
+    def on_enter(_e):
+        if btn["state"] != "disabled":
+            btn.config(bg=hover_bg)
+
+    def on_leave(_e):
+        if btn["state"] != "disabled":
+            btn.config(bg=bg)
+
+    btn.bind("<Enter>", on_enter)
+    btn.bind("<Leave>", on_leave)
+    return btn
+
+
+def make_card(parent, **kwargs):
+    """A subtly-bordered panel to visually group content."""
+    f = tk.Frame(parent, bg=BG_CARD, highlightbackground=BG_PANEL_ALT,
+                 highlightthickness=1, **kwargs)
+    return f
+
+
+# ─────────────────────────────────────────────
+#  CHESS LOGIC  (unchanged rules engine)
 # ─────────────────────────────────────────────
 def initial_board():
     """Return the starting position as an 8×8 list of (color, type) or None."""
@@ -170,6 +233,7 @@ def move_notation(board, fr, fc, tr, tc):
     prefix = "" if ptype == "P" else ptype
     return f"{prefix}{square_name(fr,fc)}{capture}{square_name(tr,tc)}"
 
+
 # ─────────────────────────────────────────────
 #  GAME STORAGE  (auto-incrementing files)
 # ─────────────────────────────────────────────
@@ -228,6 +292,7 @@ def save_game(game):
     with open(path, "w") as f:
         json.dump(games, f, indent=2)
 
+
 # ─────────────────────────────────────────────
 #  MAIN APPLICATION
 # ─────────────────────────────────────────────
@@ -236,7 +301,7 @@ class ChessApp(tk.Tk):
         super().__init__()
         self.title("Chess")
         self.resizable(False, False)
-        self.configure(bg="#1a1a2e")
+        self.configure(bg=BG_APP)
         self._show_main_menu()
 
     def _clear(self):
@@ -248,35 +313,34 @@ class ChessApp(tk.Tk):
         self._clear()
         self.title("Chess")
 
-        frame = tk.Frame(self, bg="#1a1a2e", padx=60, pady=50)
-        frame.pack()
+        outer = tk.Frame(self, bg=BG_APP, padx=70, pady=60)
+        outer.pack()
 
-        tk.Label(frame, text="♔  CHESS  ♚", font=("Georgia", 36, "bold"),
-                 bg="#1a1a2e", fg="#F0D9B5").pack(pady=(0,8))
-        tk.Label(frame, text="Local Two Player", font=("Georgia", 12),
-                 bg="#1a1a2e", fg="#888").pack(pady=(0,40))
+        tk.Label(outer, text="♔  CHESS  ♚", font=FONT_TITLE,
+                 bg=BG_APP, fg=ACCENT).pack(pady=(0, 6))
+        tk.Label(outer, text="LOCAL TWO PLAYER", font=("Segoe UI", 10, "bold"),
+                 bg=BG_APP, fg=TEXT_MUTED).pack(pady=(0, 36))
 
-        btn_style = dict(font=("Georgia", 14), width=18, bd=0, pady=10,
-                         cursor="hand2", activeforeground="#1a1a2e")
+        card = make_card(outer, padx=30, pady=28)
+        card.pack()
 
-        tk.Button(frame, text="New Game", bg="#F0D9B5", fg="#1a1a2e",
-                  activebackground="#d4bc96",
-                  command=self._start_new_game, **btn_style).pack(pady=8)
+        make_button(card, "New Game", self._start_new_game,
+                    bg=ACCENT, fg=BG_APP, hover_bg=ACCENT_HOVER,
+                    font=FONT_HEAD, width=18).pack(pady=6)
 
         games = load_games()
         replay_state = tk.NORMAL if games else tk.DISABLED
-        tk.Button(frame, text="Replay Game", bg="#B58863", fg="#1a1a2e",
-                  activebackground="#9a7250",
-                  command=self._show_replay_menu, state=replay_state,
-                  **btn_style).pack(pady=8)
+        make_button(card, "Replay Game", self._show_replay_menu,
+                    bg=BG_PANEL_ALT, fg=TEXT_PRIMARY, hover_bg="#2a2a45",
+                    font=FONT_HEAD, width=18, state=replay_state).pack(pady=6)
 
-        tk.Button(frame, text="Quit", bg="#333355", fg="#F0D9B5",
-                  activebackground="#444466",
-                  command=self.quit, **btn_style).pack(pady=8)
+        make_button(card, "Quit", self.quit,
+                    bg=BG_PANEL, fg=TEXT_MUTED, hover_bg="#26263a",
+                    font=FONT_HEAD, width=18).pack(pady=6)
 
         if games:
-            tk.Label(frame, text=f"{len(games)} game(s) saved",
-                     font=("Georgia", 10), bg="#1a1a2e", fg="#555").pack(pady=(20,0))
+            tk.Label(outer, text=f"{len(games)} game(s) saved",
+                     font=FONT_SMALL, bg=BG_APP, fg=TEXT_DIM).pack(pady=(20, 0))
 
     # ── New Game ───────────────────────────────
     def _start_new_game(self):
@@ -286,29 +350,27 @@ class ChessApp(tk.Tk):
     # ── Replay Menu ────────────────────────────
     def _show_replay_menu(self):
         self._clear()
-        games = load_games()
 
-        frame = tk.Frame(self, bg="#1a1a2e", padx=40, pady=30)
+        frame = tk.Frame(self, bg=BG_APP, padx=40, pady=30)
         frame.pack(fill="both", expand=True)
 
         tk.Label(frame, text="Select a Game to Replay",
-                 font=("Georgia", 20, "bold"), bg="#1a1a2e", fg="#F0D9B5").pack(pady=(0,20))
+                 font=("Georgia", 20, "bold"), bg=BG_APP, fg=ACCENT).pack(pady=(0, 20))
 
-        listbox_frame = tk.Frame(frame, bg="#1a1a2e")
+        listbox_frame = make_card(frame)
         listbox_frame.pack(fill="both", expand=True)
 
         sb = tk.Scrollbar(listbox_frame)
         sb.pack(side="right", fill="y")
 
         lb = tk.Listbox(listbox_frame, yscrollcommand=sb.set,
-                        font=("Courier", 11), bg="#0d0d1a", fg="#F0D9B5",
-                        selectbackground="#B58863", selectforeground="#1a1a2e",
+                        font=FONT_MONO, bg=BG_CARD, fg=TEXT_PRIMARY,
+                        selectbackground=ACCENT, selectforeground=BG_APP,
                         bd=0, highlightthickness=0, activestyle="none",
-                        width=50, height=12)
-        lb.pack(side="left", fill="both", expand=True)
+                        width=54, height=12)
+        lb.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=10)
         sb.config(command=lb.yview)
 
-        games = load_games()
         # Annotate each game with its source file for display
         annotated = []
         for path in _all_save_files():
@@ -321,12 +383,13 @@ class ChessApp(tk.Tk):
                 pass
 
         for i, (fname, g) in enumerate(annotated):
-            result = g.get("result", "?")
             date   = g.get("date", "")
             moves  = len(g.get("moves", []))
-            lb.insert("end", f"  {i+1:>2}.  {date}   {moves}mv   {fname}")
+            result = g.get("result", "?")
+            short_result = result.split("!")[0] if "!" in result else result
+            lb.insert("end", f"  {i+1:>2}.  {date}   {moves:>3}mv   {short_result}")
 
-        btn_frame = tk.Frame(frame, bg="#1a1a2e")
+        btn_frame = tk.Frame(frame, bg=BG_APP)
         btn_frame.pack(pady=16)
 
         def launch():
@@ -339,15 +402,12 @@ class ChessApp(tk.Tk):
             self._clear()
             ReplayScreen(self, game_data)
 
-        tk.Button(btn_frame, text="Replay Selected", font=("Georgia", 13),
-                  bg="#F0D9B5", fg="#1a1a2e", bd=0, padx=16, pady=8,
-                  cursor="hand2", activebackground="#d4bc96",
-                  command=launch).pack(side="left", padx=8)
-
-        tk.Button(btn_frame, text="← Back", font=("Georgia", 13),
-                  bg="#333355", fg="#F0D9B5", bd=0, padx=16, pady=8,
-                  cursor="hand2", activebackground="#444466",
-                  command=self._show_main_menu).pack(side="left", padx=8)
+        make_button(btn_frame, "Replay Selected", launch,
+                    bg=ACCENT, fg=BG_APP, hover_bg=ACCENT_HOVER,
+                    font=FONT_BODY).pack(side="left", padx=8)
+        make_button(btn_frame, "← Back", self._show_main_menu,
+                    bg=BG_PANEL_ALT, fg=TEXT_PRIMARY, hover_bg="#2a2a45",
+                    font=FONT_BODY).pack(side="left", padx=8)
 
 
 # ─────────────────────────────────────────────
@@ -355,62 +415,114 @@ class ChessApp(tk.Tk):
 # ─────────────────────────────────────────────
 class GameScreen(tk.Frame):
     def __init__(self, master):
-        super().__init__(master, bg="#1a1a2e")
+        super().__init__(master, bg=BG_APP)
         self.pack(fill="both", expand=True)
         self.master = master
 
-        self.board      = initial_board()
-        self.turn       = "white"
-        self.selected   = None          # (r, c) of selected piece
-        self.valid_moves= []
-        self.last_move  = None          # (fr,fc,tr,tc)
-        self.move_log   = []            # list of notation strings
-        self.positions  = [deepcopy(self.board)]  # for replay
-        self.game_over  = False
+        self.board       = initial_board()
+        self.turn        = "white"
+        self.selected    = None          # (r, c) of selected piece
+        self.valid_moves = []
+        self.last_move   = None          # (fr,fc,tr,tc)
+        self.move_log    = []            # list of notation strings
+        self.positions   = [deepcopy(self.board)]  # for replay
+        self.captured    = {"white": [], "black": []}   # pieces captured BY each side
+        self.captured_history = [deepcopy(self.captured)]
+        self.game_over   = False
+        self.animating   = False
 
         self._build_ui()
         self._draw_board()
+        self._update_captured_panel()
 
     # ── UI Layout ──────────────────────────────
     def _build_ui(self):
-        top = tk.Frame(self, bg="#1a1a2e")
-        top.pack(fill="x", padx=10, pady=6)
+        top = tk.Frame(self, bg=BG_APP)
+        top.pack(fill="x", padx=14, pady=(12, 6))
 
-        tk.Button(top, text="← Menu", font=("Georgia", 11),
-                  bg="#333355", fg="#F0D9B5", bd=0, padx=10, pady=4,
-                  cursor="hand2", activebackground="#444466",
-                  command=self._back_to_menu).pack(side="left")
+        make_button(top, "← Menu", self._back_to_menu,
+                    bg=BG_PANEL_ALT, fg=TEXT_PRIMARY, hover_bg="#2a2a45",
+                    font=FONT_SUB, padx=12, pady=6).pack(side="left")
+
+        status_wrap = tk.Frame(top, bg=BG_APP)
+        status_wrap.pack(side="left", padx=20)
+
+        self.turn_dot = tk.Canvas(status_wrap, width=16, height=16, bg=BG_APP,
+                                   highlightthickness=0)
+        self.turn_dot.pack(side="left", padx=(0, 8))
+        self._draw_turn_dot()
 
         self.status_var = tk.StringVar(value="White's turn")
-        tk.Label(top, textvariable=self.status_var,
-                 font=("Georgia", 14, "bold"), bg="#1a1a2e", fg="#F0D9B5").pack(side="left", padx=20)
+        tk.Label(status_wrap, textvariable=self.status_var,
+                 font=FONT_HEAD, bg=BG_APP, fg=TEXT_PRIMARY).pack(side="left")
 
-        main = tk.Frame(self, bg="#1a1a2e")
-        main.pack(padx=10, pady=4)
+        main = tk.Frame(self, bg=BG_APP)
+        main.pack(padx=14, pady=4)
 
         # Board canvas
         canvas_size = SQUARE_SIZE * 8 + BOARD_OFFSET * 2
         self.canvas = tk.Canvas(main, width=canvas_size, height=canvas_size,
-                                bg="#1a1a2e", bd=0, highlightthickness=0)
+                                bg=BG_APP, bd=0, highlightthickness=0)
         self.canvas.pack(side="left")
         self.canvas.bind("<Button-1>", self._on_click)
 
-        # Move log panel
-        log_frame = tk.Frame(main, bg="#0d0d1a", width=180)
-        log_frame.pack(side="left", fill="y", padx=(12,0))
-        log_frame.pack_propagate(False)
+        # Right side panel
+        side_panel = tk.Frame(main, bg=BG_APP, width=190)
+        side_panel.pack(side="left", fill="y", padx=(14, 0))
+        side_panel.pack_propagate(False)
 
-        tk.Label(log_frame, text="Move Log", font=("Georgia", 12, "bold"),
-                 bg="#0d0d1a", fg="#F0D9B5").pack(pady=8)
+        # Move log card
+        log_card = make_card(side_panel)
+        log_card.pack(fill="both", expand=True)
 
-        self.log_text = tk.Text(log_frame, font=("Courier", 10),
-                                bg="#0d0d1a", fg="#ccc", bd=0,
-                                state="disabled", wrap="word")
-        self.log_text.pack(fill="both", expand=True, padx=6, pady=(0,8))
+        tk.Label(log_card, text="MOVE LOG", font=("Segoe UI", 10, "bold"),
+                 bg=BG_CARD, fg=ACCENT).pack(pady=(10, 6))
+
+        self.log_text = tk.Text(log_card, font=FONT_MONO,
+                                bg=BG_CARD, fg=TEXT_PRIMARY, bd=0,
+                                state="disabled", wrap="word",
+                                highlightthickness=0, padx=8)
+        self.log_text.pack(fill="both", expand=True, padx=4, pady=(0, 10))
+
+        # Captured pieces card
+        cap_card = make_card(side_panel)
+        cap_card.pack(fill="x", pady=(10, 0))
+
+        tk.Label(cap_card, text="CAPTURED", font=("Segoe UI", 10, "bold"),
+                 bg=BG_CARD, fg=ACCENT).pack(pady=(10, 6))
+
+        self.cap_white_var = tk.StringVar(value="—")
+        self.cap_black_var = tk.StringVar(value="—")
+        self.material_var  = tk.StringVar(value="Material even")
+
+        row_w = tk.Frame(cap_card, bg=BG_CARD)
+        row_w.pack(fill="x", padx=10, anchor="w")
+        tk.Label(row_w, text="White:", font=FONT_SMALL, bg=BG_CARD,
+                 fg=TEXT_MUTED, width=6, anchor="w").pack(side="left")
+        tk.Label(row_w, textvariable=self.cap_white_var, font=CAP_FONT,
+                 bg=BG_CARD, fg=TEXT_PRIMARY, anchor="w",
+                 justify="left", wraplength=140).pack(side="left")
+
+        row_b = tk.Frame(cap_card, bg=BG_CARD)
+        row_b.pack(fill="x", padx=10, pady=(2, 0), anchor="w")
+        tk.Label(row_b, text="Black:", font=FONT_SMALL, bg=BG_CARD,
+                 fg=TEXT_MUTED, width=6, anchor="w").pack(side="left")
+        tk.Label(row_b, textvariable=self.cap_black_var, font=CAP_FONT,
+                 bg=BG_CARD, fg=TEXT_PRIMARY, anchor="w",
+                 justify="left", wraplength=140).pack(side="left")
+
+        tk.Label(cap_card, textvariable=self.material_var, font=FONT_SMALL,
+                 bg=BG_CARD, fg=ACCENT).pack(pady=(8, 10), padx=10, anchor="w")
+
+    def _draw_turn_dot(self):
+        self.turn_dot.delete("all")
+        fill = "#FFFFFF" if self.turn == "white" else "#111111"
+        outline = TEXT_MUTED
+        self.turn_dot.create_oval(2, 2, 14, 14, fill=fill, outline=outline)
 
     # ── Drawing ────────────────────────────────
-    def _draw_board(self):
-        self.canvas.delete("all")
+    def _draw_board(self, hide_square=None):
+        self.canvas.delete("board", "piece")
         check_king = None
         if is_in_check(self.board, self.turn):
             check_king = find_king(self.board, self.turn)
@@ -436,43 +548,43 @@ class GameScreen(tk.Frame):
                 else:
                     color = base
 
-                self.canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
+                self.canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline="", tags="board")
 
                 # dot for valid move on empty square
                 if (r, c) in self.valid_moves and self.board[r][c] is None:
                     cx, cy = (x1+x2)//2, (y1+y2)//2
                     self.canvas.create_oval(cx-10, cy-10, cx+10, cy+10,
-                                            fill="#3a3a3a", outline="", stipple="gray50")
+                                            fill="#2b2b2b", outline="", stipple="gray50", tags="board")
 
                 # piece
+                if hide_square == (r, c):
+                    continue
                 piece = self.board[r][c]
                 if piece:
                     sym = UNICODE_PIECES[piece]
-                    fg = "#FFFFFF" if piece[0] == "white" else "#1a1a2e"
+                    fg = "#FFFFFF" if piece[0] == "white" else "#161616"
                     self.canvas.create_text(
                         (x1+x2)//2, (y1+y2)//2,
-                        text=sym, font=("Segoe UI Symbol", 38),
-                        fill=fg
+                        text=sym, font=PIECE_FONT,
+                        fill=fg, tags="piece"
                     )
 
         # Rank / file labels
         for i in range(8):
-            # files (a-h)
             lx = BOARD_OFFSET + i * SQUARE_SIZE + SQUARE_SIZE // 2
             self.canvas.create_text(lx, BOARD_OFFSET - 14, text="abcdefgh"[i],
-                                    font=("Georgia", 10), fill="#888")
+                                    font=FONT_SMALL, fill=TEXT_MUTED, tags="board")
             self.canvas.create_text(lx, BOARD_OFFSET + 8*SQUARE_SIZE + 14, text="abcdefgh"[i],
-                                    font=("Georgia", 10), fill="#888")
-            # ranks (8-1)
+                                    font=FONT_SMALL, fill=TEXT_MUTED, tags="board")
             ly = BOARD_OFFSET + i * SQUARE_SIZE + SQUARE_SIZE // 2
             self.canvas.create_text(BOARD_OFFSET - 16, ly, text=str(8-i),
-                                    font=("Georgia", 10), fill="#888")
+                                    font=FONT_SMALL, fill=TEXT_MUTED, tags="board")
             self.canvas.create_text(BOARD_OFFSET + 8*SQUARE_SIZE + 16, ly, text=str(8-i),
-                                    font=("Georgia", 10), fill="#888")
+                                    font=FONT_SMALL, fill=TEXT_MUTED, tags="board")
 
     # ── Click handler ──────────────────────────
     def _on_click(self, event):
-        if self.game_over:
+        if self.game_over or self.animating:
             return
         c = (event.x - BOARD_OFFSET) // SQUARE_SIZE
         r = (event.y - BOARD_OFFSET) // SQUARE_SIZE
@@ -488,7 +600,8 @@ class GameScreen(tk.Frame):
         else:
             fr, fc = self.selected
             if (r, c) in self.valid_moves:
-                self._apply_move(fr, fc, r, c)
+                self._begin_animated_move(fr, fc, r, c)
+                return
             elif self.board[r][c] and self.board[r][c][0] == self.turn:
                 # re-select
                 self.selected = (r, c)
@@ -499,12 +612,50 @@ class GameScreen(tk.Frame):
 
         self._draw_board()
 
+    # ── Animation ──────────────────────────────
+    def _begin_animated_move(self, fr, fc, tr, tc):
+        piece = self.board[fr][fc]
+        self.selected = None
+        self.valid_moves = []
+        self.animating = True
+        self._draw_board(hide_square=(fr, fc))
+
+        x1 = BOARD_OFFSET + fc * SQUARE_SIZE + SQUARE_SIZE // 2
+        y1 = BOARD_OFFSET + fr * SQUARE_SIZE + SQUARE_SIZE // 2
+        x2 = BOARD_OFFSET + tc * SQUARE_SIZE + SQUARE_SIZE // 2
+        y2 = BOARD_OFFSET + tr * SQUARE_SIZE + SQUARE_SIZE // 2
+        dx = (x2 - x1) / ANIM_STEPS
+        dy = (y2 - y1) / ANIM_STEPS
+
+        sym = UNICODE_PIECES[piece]
+        fg = "#FFFFFF" if piece[0] == "white" else "#161616"
+        anim_item = self.canvas.create_text(x1, y1, text=sym, font=PIECE_FONT,
+                                             fill=fg, tags="anim")
+
+        def step(i):
+            if i >= ANIM_STEPS:
+                self.canvas.delete("anim")
+                self.animating = False
+                self._apply_move(fr, fc, tr, tc)
+                self._draw_board()
+                return
+            self.canvas.move(anim_item, dx, dy)
+            self.after(ANIM_DELAY, lambda: step(i + 1))
+
+        step(0)
+
     # ── Apply move ─────────────────────────────
     def _apply_move(self, fr, fc, tr, tc):
         notation = move_notation(self.board, fr, fc, tr, tc)
 
+        mover_color = self.board[fr][fc][0]
+        captured_piece = self.board[tr][tc]
+
         self.board[tr][tc] = self.board[fr][fc]
         self.board[fr][fc] = None
+
+        if captured_piece:
+            self.captured[mover_color].append(captured_piece[1])
 
         # Pawn promotion — ask the player
         piece = self.board[tr][tc]
@@ -518,6 +669,8 @@ class GameScreen(tk.Frame):
         self.selected   = None
         self.valid_moves= []
         self.positions.append(deepcopy(self.board))
+        self.captured_history.append(deepcopy(self.captured))
+        self._update_captured_panel()
 
         # Check / checkmate / stalemate
         next_turn = opponent(self.turn)
@@ -535,8 +688,25 @@ class GameScreen(tk.Frame):
 
         self._log_move(notation)
         self.turn = next_turn
-        self.status_var.set(f"{'⬜' if self.turn=='white' else '⬛'}  {self.turn.capitalize()}'s turn"
+        self._draw_turn_dot()
+        self.status_var.set(f"{self.turn.capitalize()}'s turn"
                             + (" — Check!" if is_in_check(self.board, self.turn) else ""))
+
+    # ── Captured pieces panel ──────────────────
+    def _update_captured_panel(self):
+        white_caps = sorted(self.captured["white"], key=lambda p: CAP_ORDER.get(p, 9))
+        black_caps = sorted(self.captured["black"], key=lambda p: CAP_ORDER.get(p, 9))
+
+        self.cap_white_var.set("".join(UNICODE_PIECES[("black", p)] for p in white_caps) or "—")
+        self.cap_black_var.set("".join(UNICODE_PIECES[("white", p)] for p in black_caps) or "—")
+
+        diff = sum(PIECE_VALUES[p] for p in white_caps) - sum(PIECE_VALUES[p] for p in black_caps)
+        if diff > 0:
+            self.material_var.set(f"White ahead by {diff}")
+        elif diff < 0:
+            self.material_var.set(f"Black ahead by {-diff}")
+        else:
+            self.material_var.set("Material even")
 
     # ── Promotion dialog ───────────────────────
     def _promotion_dialog(self, color):
@@ -545,32 +715,37 @@ class GameScreen(tk.Frame):
 
         dlg = tk.Toplevel(self)
         dlg.title("Pawn Promotion")
-        dlg.configure(bg="#1a1a2e")
+        dlg.configure(bg=BG_APP)
         dlg.resizable(False, False)
         dlg.grab_set()          # modal
         dlg.protocol("WM_DELETE_WINDOW", lambda: None)  # prevent closing
 
         tk.Label(dlg, text=f"{color.capitalize()}: choose promotion",
-                 font=("Georgia", 13, "bold"), bg="#1a1a2e", fg="#F0D9B5",
-                 padx=20, pady=12).pack()
+                 font=FONT_HEAD, bg=BG_APP, fg=ACCENT,
+                 padx=20, pady=14).pack()
 
-        btn_frame = tk.Frame(dlg, bg="#1a1a2e")
+        btn_frame = tk.Frame(dlg, bg=BG_APP)
         btn_frame.pack(padx=20, pady=(0, 20))
 
         options = [("Q", "Queen"), ("R", "Rook"), ("B", "Bishop"), ("N", "Knight")]
         for letter, name in options:
             sym = UNICODE_PIECES[(color, letter)]
-            tk.Button(
+            btn = tk.Button(
                 btn_frame,
                 text=f"{sym}\n{name}",
-                font=("Segoe UI Symbol", 22),
+                font=("Segoe UI Symbol", 20),
                 width=4, height=2,
-                bg="#F0D9B5" if color == "white" else "#333355",
-                fg="#1a1a2e" if color == "white" else "#F0D9B5",
+                bg=BG_PANEL_ALT if color == "white" else BG_PANEL,
+                fg=TEXT_PRIMARY,
                 bd=0, cursor="hand2",
-                activebackground="#d4bc96",
+                activebackground=ACCENT, activeforeground=BG_APP,
+                highlightthickness=0,
                 command=lambda l=letter: [chosen.set(l), dlg.destroy()]
-            ).pack(side="left", padx=6)
+            )
+            btn.pack(side="left", padx=6)
+            btn.bind("<Enter>", lambda e, b=btn: b.config(bg=ACCENT, fg=BG_APP))
+            btn.bind("<Leave>", lambda e, b=btn, cc=color: b.config(
+                bg=BG_PANEL_ALT if cc == "white" else BG_PANEL, fg=TEXT_PRIMARY))
 
         self.wait_window(dlg)
         return chosen.get()
@@ -595,16 +770,16 @@ class GameScreen(tk.Frame):
         self.status_var.set(message)
         self._draw_board()
 
-        # Save game
-        games = load_games()
-        games.append({
+        # Save game (bug fix: save_game() appends ONE game record, not a list)
+        game_record = {
             "date":      datetime.now().strftime("%Y-%m-%d %H:%M"),
             "result":    message,
             "moves":     self.move_log,
             "positions": [[[list(sq) if sq else None for sq in row]
-                           for row in pos] for pos in self.positions]
-        })
-        save_games(games)
+                           for row in pos] for pos in self.positions],
+            "captured":  [deepcopy(c) for c in self.captured_history],
+        }
+        save_game(game_record)
 
         def back():
             popup.destroy()
@@ -612,15 +787,15 @@ class GameScreen(tk.Frame):
 
         popup = tk.Toplevel(self)
         popup.title("Game Over")
-        popup.configure(bg="#1a1a2e")
+        popup.configure(bg=BG_APP)
         popup.resizable(False, False)
         popup.grab_set()
 
         tk.Label(popup, text=message, font=("Georgia", 16, "bold"),
-                 bg="#1a1a2e", fg="#F0D9B5", padx=30, pady=20).pack()
-        tk.Button(popup, text="Back to Menu", font=("Georgia", 12),
-                  bg="#F0D9B5", fg="#1a1a2e", bd=0, padx=16, pady=8,
-                  cursor="hand2", command=back).pack(pady=(0, 20))
+                 bg=BG_APP, fg=ACCENT, padx=30, pady=20).pack()
+        make_button(popup, "Back to Menu", back,
+                    bg=ACCENT, fg=BG_APP, hover_bg=ACCENT_HOVER,
+                    font=FONT_BODY).pack(pady=(0, 20))
 
     def _back_to_menu(self):
         if not self.game_over:
@@ -634,7 +809,7 @@ class GameScreen(tk.Frame):
 # ─────────────────────────────────────────────
 class ReplayScreen(tk.Frame):
     def __init__(self, master, game_data):
-        super().__init__(master, bg="#1a1a2e")
+        super().__init__(master, bg=BG_APP)
         self.pack(fill="both", expand=True)
         self.master = master
 
@@ -651,6 +826,13 @@ class ReplayScreen(tk.Frame):
             master._show_replay_menu()
             return
 
+        # Captured-pieces history (older saves may not have this key)
+        raw_caps = game_data.get("captured")
+        if raw_caps and len(raw_caps) == len(self.positions):
+            self.captured_history = raw_caps
+        else:
+            self.captured_history = [{"white": [], "black": []} for _ in self.positions]
+
         self.index     = 0
         self.total     = len(self.positions)
         self._auto_job = None   # after() id for auto-play
@@ -660,39 +842,41 @@ class ReplayScreen(tk.Frame):
 
     # ── UI ─────────────────────────────────────
     def _build_ui(self):
-        top = tk.Frame(self, bg="#1a1a2e")
-        top.pack(fill="x", padx=10, pady=6)
+        top = tk.Frame(self, bg=BG_APP)
+        top.pack(fill="x", padx=14, pady=(12, 6))
 
-        tk.Button(top, text="← Back", font=("Georgia", 11),
-                  bg="#333355", fg="#F0D9B5", bd=0, padx=10, pady=4,
-                  cursor="hand2", activebackground="#444466",
-                  command=self._back).pack(side="left")
+        make_button(top, "← Back", self._back,
+                    bg=BG_PANEL_ALT, fg=TEXT_PRIMARY, hover_bg="#2a2a45",
+                    font=FONT_SUB, padx=12, pady=6).pack(side="left")
 
         self.status_var = tk.StringVar(value="Start position")
         tk.Label(top, textvariable=self.status_var,
-                 font=("Georgia", 13, "bold"), bg="#1a1a2e", fg="#F0D9B5").pack(side="left", padx=20)
+                 font=FONT_HEAD, bg=BG_APP, fg=TEXT_PRIMARY).pack(side="left", padx=20)
 
-        main = tk.Frame(self, bg="#1a1a2e")
-        main.pack(padx=10, pady=4)
+        main = tk.Frame(self, bg=BG_APP)
+        main.pack(padx=14, pady=4)
 
         canvas_size = SQUARE_SIZE * 8 + BOARD_OFFSET * 2
         self.canvas = tk.Canvas(main, width=canvas_size, height=canvas_size,
-                                bg="#1a1a2e", bd=0, highlightthickness=0)
+                                bg=BG_APP, bd=0, highlightthickness=0)
         self.canvas.pack(side="left")
 
-        # Right panel: move list + controls
-        right = tk.Frame(main, bg="#0d0d1a", width=200)
-        right.pack(side="left", fill="y", padx=(12,0))
+        # Right panel: move list + captured + controls
+        right = tk.Frame(main, bg=BG_APP, width=210)
+        right.pack(side="left", fill="y", padx=(14, 0))
         right.pack_propagate(False)
 
-        tk.Label(right, text="Moves", font=("Georgia", 12, "bold"),
-                 bg="#0d0d1a", fg="#F0D9B5").pack(pady=8)
+        moves_card = make_card(right)
+        moves_card.pack(fill="both", expand=True)
 
-        self.move_list = tk.Listbox(right, font=("Courier", 10),
-                                    bg="#0d0d1a", fg="#ccc", bd=0,
+        tk.Label(moves_card, text="MOVES", font=("Segoe UI", 10, "bold"),
+                 bg=BG_CARD, fg=ACCENT).pack(pady=(10, 6))
+
+        self.move_list = tk.Listbox(moves_card, font=FONT_MONO,
+                                    bg=BG_CARD, fg=TEXT_PRIMARY, bd=0,
                                     highlightthickness=0, activestyle="none",
-                                    selectbackground="#B58863", selectforeground="#1a1a2e")
-        self.move_list.pack(fill="both", expand=True, padx=6)
+                                    selectbackground=ACCENT, selectforeground=BG_APP)
+        self.move_list.pack(fill="both", expand=True, padx=6, pady=(0, 8))
         self.move_list.bind("<<ListboxSelect>>", self._on_list_select)
 
         # Populate move list
@@ -702,32 +886,72 @@ class ReplayScreen(tk.Frame):
             bl = self.moves[i+1] if i+1 < len(self.moves) else ""
             self.move_list.insert("end", f"  {n:>3}. {w:<8} {bl}")
 
+        # Captured pieces card
+        cap_card = make_card(right)
+        cap_card.pack(fill="x", pady=(10, 0))
+
+        tk.Label(cap_card, text="CAPTURED", font=("Segoe UI", 10, "bold"),
+                 bg=BG_CARD, fg=ACCENT).pack(pady=(10, 6))
+
+        self.cap_white_var = tk.StringVar(value="—")
+        self.cap_black_var = tk.StringVar(value="—")
+        self.material_var  = tk.StringVar(value="Material even")
+
+        row_w = tk.Frame(cap_card, bg=BG_CARD)
+        row_w.pack(fill="x", padx=10, anchor="w")
+        tk.Label(row_w, text="White:", font=FONT_SMALL, bg=BG_CARD,
+                 fg=TEXT_MUTED, width=6, anchor="w").pack(side="left")
+        tk.Label(row_w, textvariable=self.cap_white_var, font=CAP_FONT,
+                 bg=BG_CARD, fg=TEXT_PRIMARY, anchor="w",
+                 justify="left", wraplength=150).pack(side="left")
+
+        row_b = tk.Frame(cap_card, bg=BG_CARD)
+        row_b.pack(fill="x", padx=10, pady=(2, 0), anchor="w")
+        tk.Label(row_b, text="Black:", font=FONT_SMALL, bg=BG_CARD,
+                 fg=TEXT_MUTED, width=6, anchor="w").pack(side="left")
+        tk.Label(row_b, textvariable=self.cap_black_var, font=CAP_FONT,
+                 bg=BG_CARD, fg=TEXT_PRIMARY, anchor="w",
+                 justify="left", wraplength=150).pack(side="left")
+
+        tk.Label(cap_card, textvariable=self.material_var, font=FONT_SMALL,
+                 bg=BG_CARD, fg=ACCENT).pack(pady=(8, 10), padx=10, anchor="w")
+
         # Controls
-        ctrl = tk.Frame(right, bg="#0d0d1a")
-        ctrl.pack(pady=10)
+        ctrl_card = make_card(right)
+        ctrl_card.pack(fill="x", pady=(10, 0))
 
-        btn = dict(font=("Segoe UI Symbol", 16), bd=0, bg="#1a1a2e",
-                   fg="#F0D9B5", activebackground="#333355",
-                   activeforeground="#F0D9B5", cursor="hand2", width=3)
+        ctrl = tk.Frame(ctrl_card, bg=BG_CARD)
+        ctrl.pack(pady=12)
 
-        tk.Button(ctrl, text="|◀", command=self._go_start, **btn).grid(row=0, column=0, padx=2)
-        tk.Button(ctrl, text="◀",  command=self._prev,     **btn).grid(row=0, column=1, padx=2)
-        self.play_btn = tk.Button(ctrl, text="▶", command=self._toggle_auto, **btn)
-        self.play_btn.grid(row=0, column=2, padx=2)
-        tk.Button(ctrl, text="▶",  command=self._next,     **btn).grid(row=0, column=3, padx=2)
-        tk.Button(ctrl, text="▶|", command=self._go_end,   **btn).grid(row=0, column=4, padx=2)
+        btn_kwargs = dict(font=("Segoe UI Symbol", 15), bd=0, bg=BG_PANEL_ALT,
+                          fg=TEXT_PRIMARY, activebackground=ACCENT,
+                          activeforeground=BG_APP, cursor="hand2", width=3,
+                          highlightthickness=0)
+
+        def hover_ctrl(b):
+            b.bind("<Enter>", lambda e: b.config(bg=ACCENT, fg=BG_APP))
+            b.bind("<Leave>", lambda e: b.config(bg=BG_PANEL_ALT, fg=TEXT_PRIMARY))
+            return b
+
+        hover_ctrl(tk.Button(ctrl, text="|◀", command=self._go_start, **btn_kwargs)).grid(row=0, column=0, padx=2)
+        hover_ctrl(tk.Button(ctrl, text="◀",  command=self._prev,     **btn_kwargs)).grid(row=0, column=1, padx=2)
+        self.play_btn = tk.Button(ctrl, text="▶", command=self._toggle_auto, **btn_kwargs)
+        hover_ctrl(self.play_btn).grid(row=0, column=2, padx=2)
+        hover_ctrl(tk.Button(ctrl, text="▶",  command=self._next,     **btn_kwargs)).grid(row=0, column=3, padx=2)
+        hover_ctrl(tk.Button(ctrl, text="▶|", command=self._go_end,   **btn_kwargs)).grid(row=0, column=4, padx=2)
 
         # Speed slider
-        speed_frame = tk.Frame(right, bg="#0d0d1a")
-        speed_frame.pack(pady=(0,8))
-        tk.Label(speed_frame, text="Speed", font=("Georgia", 9),
-                 bg="#0d0d1a", fg="#888").pack()
+        speed_frame = tk.Frame(ctrl_card, bg=BG_CARD)
+        speed_frame.pack(pady=(0, 10))
+        tk.Label(speed_frame, text="Speed", font=FONT_SMALL,
+                 bg=BG_CARD, fg=TEXT_MUTED).pack()
         self.speed_var = tk.IntVar(value=1000)
         tk.Scale(speed_frame, from_=300, to=2000, orient="horizontal",
                  variable=self.speed_var, resolution=100,
-                 bg="#0d0d1a", fg="#F0D9B5", troughcolor="#333355",
-                 highlightthickness=0, showvalue=False,
-                 length=160).pack()
+                 bg=BG_CARD, fg=TEXT_PRIMARY, troughcolor=BG_PANEL_ALT,
+                 highlightthickness=0, showvalue=False, bd=0,
+                 activebackground=ACCENT,
+                 length=170).pack()
 
     # ── Drawing ────────────────────────────────
     def _draw(self):
@@ -766,24 +990,24 @@ class ReplayScreen(tk.Frame):
                 piece = board[r][c]
                 if piece:
                     sym = UNICODE_PIECES[piece]
-                    fg = "#FFFFFF" if piece[0] == "white" else "#1a1a2e"
+                    fg = "#FFFFFF" if piece[0] == "white" else "#161616"
                     self.canvas.create_text(
                         (x1+x2)//2, (y1+y2)//2,
-                        text=sym, font=("Segoe UI Symbol", 38), fill=fg
+                        text=sym, font=PIECE_FONT, fill=fg
                     )
 
         # Labels
         for i in range(8):
             lx = BOARD_OFFSET + i * SQUARE_SIZE + SQUARE_SIZE // 2
             self.canvas.create_text(lx, BOARD_OFFSET - 14, text="abcdefgh"[i],
-                                    font=("Georgia", 10), fill="#888")
+                                    font=FONT_SMALL, fill=TEXT_MUTED)
             self.canvas.create_text(lx, BOARD_OFFSET + 8*SQUARE_SIZE + 14, text="abcdefgh"[i],
-                                    font=("Georgia", 10), fill="#888")
+                                    font=FONT_SMALL, fill=TEXT_MUTED)
             ly = BOARD_OFFSET + i * SQUARE_SIZE + SQUARE_SIZE // 2
             self.canvas.create_text(BOARD_OFFSET - 16, ly, text=str(8-i),
-                                    font=("Georgia", 10), fill="#888")
+                                    font=FONT_SMALL, fill=TEXT_MUTED)
             self.canvas.create_text(BOARD_OFFSET + 8*SQUARE_SIZE + 16, ly, text=str(8-i),
-                                    font=("Georgia", 10), fill="#888")
+                                    font=FONT_SMALL, fill=TEXT_MUTED)
 
         # Status
         if self.index == 0:
@@ -802,6 +1026,25 @@ class ReplayScreen(tk.Frame):
         if self.index > 0:
             self.move_list.selection_set(move_row)
             self.move_list.see(move_row)
+
+        self._update_captured_panel()
+
+    # ── Captured pieces panel ──────────────────
+    def _update_captured_panel(self):
+        caps = self.captured_history[self.index]
+        white_caps = sorted(caps.get("white", []), key=lambda p: CAP_ORDER.get(p, 9))
+        black_caps = sorted(caps.get("black", []), key=lambda p: CAP_ORDER.get(p, 9))
+
+        self.cap_white_var.set("".join(UNICODE_PIECES[("black", p)] for p in white_caps) or "—")
+        self.cap_black_var.set("".join(UNICODE_PIECES[("white", p)] for p in black_caps) or "—")
+
+        diff = sum(PIECE_VALUES[p] for p in white_caps) - sum(PIECE_VALUES[p] for p in black_caps)
+        if diff > 0:
+            self.material_var.set(f"White ahead by {diff}")
+        elif diff < 0:
+            self.material_var.set(f"Black ahead by {-diff}")
+        else:
+            self.material_var.set("Material even")
 
     # ── Navigation ─────────────────────────────
     def _go_start(self):
