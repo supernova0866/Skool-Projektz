@@ -202,28 +202,65 @@ def ShowTenantDetails(TenantData):
         print("No Balance Due. Fully Paid or Overpaid by:", -Balance)
 
 
+def PrintTableLine():
+    print("-" * 76)
+
+
 def ShowAllTenants(TenantData):
+    if len(TenantData) == 0:
+        print("\nThere are currently no tenants in the system.")
+        return
+
     print("\n--- All Tenants ---")
-
-    for TenantID in TenantData:
-        Record = TenantData[TenantID]
-        print(TenantID, "-", Record[NameIndex], "-", "Unit:", Record[UnitIndex])
-
-
-def ShowOverdueTenants(TenantData):
-    print("\n--- Overdue Tenants ---")
-    FoundAny = False
+    PrintTableLine()
+    HeaderRow = "TenantID".ljust(10) + "| " + "Name".ljust(18) + "| " + "Unit".ljust(8) + "| " + "Rent".ljust(10) + "| " + "Balance"
+    print(HeaderRow)
+    PrintTableLine()
 
     for TenantID in TenantData:
         Record = TenantData[TenantID]
         DaysPassed, TotalMonths, ExpectedAmount, Balance = CalculateBalance(Record)
 
         if Balance > 0:
-            FoundAny = True
-            print(TenantID, "-", Record[NameIndex], "- Balance Due:", Balance)
+            BalanceText = "Due: " + str(Balance)
+        else:
+            BalanceText = "Clear"
 
-    if FoundAny == False:
-        print("No tenants are currently overdue.")
+        Row = TenantID.ljust(10) + "| " + Record[NameIndex].ljust(18) + "| " + Record[UnitIndex].ljust(8) + "| " + str(Record[RentAmountIndex]).ljust(10) + "| " + BalanceText
+        print(Row)
+
+    PrintTableLine()
+
+
+def ShowOverdueTenants(TenantData):
+    if len(TenantData) == 0:
+        print("\nThere are currently no tenants in the system.")
+        return
+
+    OverdueList = []
+
+    for TenantID in TenantData:
+        Record = TenantData[TenantID]
+        DaysPassed, TotalMonths, ExpectedAmount, Balance = CalculateBalance(Record)
+
+        if Balance > 0:
+            OverdueList.append((TenantID, Record[NameIndex], Balance))
+
+    if len(OverdueList) == 0:
+        print("\nNo tenants are currently overdue. Everyone is paid up.")
+        return
+
+    print("\n--- Overdue Tenants ---")
+    PrintTableLine()
+    HeaderRow = "TenantID".ljust(10) + "| " + "Name".ljust(18) + "| " + "Balance Due"
+    print(HeaderRow)
+    PrintTableLine()
+
+    for Entry in OverdueList:
+        Row = Entry[0].ljust(10) + "| " + Entry[1].ljust(18) + "| " + str(Entry[2])
+        print(Row)
+
+    PrintTableLine()
 
 
 # ---------------- Main Program ----------------
