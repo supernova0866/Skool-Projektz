@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GitHub Repo Tree Preview & Pusher</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel-2: #1f242d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --blue: #58a6ff;
+      --blue-bg: rgba(88, 166, 255, 0.14);
+      --green: #3fb950;
+      --green-bg: rgba(63, 185, 80, 0.15);
+      --danger: #f85149;
+      --accent: #238636;
+      --accent-hover: #2ea043;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+
+    header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .legend {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+      align-items: center;
+    }
+
+    .badge-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+
+    .dot-blue { background: var(--blue); }
+    .dot-green { background: var(--green); }
+
+    .container {
+      max-width: 1360px;
+      margin: 20px auto;
+      padding: 0 20px 40px;
+      display: grid;
+      grid-template-columns: 370px 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 960px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+
+    .field {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    textarea {
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    textarea {
+      min-height: 76px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--blue);
+    }
+
+    .row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    button {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    button:hover {
+      background: #28303d;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    button.primary:hover {
+      background: var(--accent-hover);
+    }
+
+    button.danger {
+      color: var(--danger);
+      border-color: rgba(248, 81, 73, 0.4);
+    }
+
+    button.danger:hover {
+      background: rgba(248, 81, 73, 0.14);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .note {
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      margin-top: 10px;
+    }
+
+    .tree-paste-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 12px;
+      display: none;
+    }
+
+    .tree-paste-box.open {
+      display: block;
+    }
+
+    .tree-paste-box textarea {
+      min-height: 190px;
+      margin-bottom: 8px;
+    }
+
+    .preview-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .root-dropzone {
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.015);
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .root-dropzone.drag-over {
+      border-color: var(--blue);
+      background: var(--blue-bg);
+      color: var(--text);
+    }
+
+    .tree {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      min-height: 340px;
+      max-height: 560px;
+      overflow: auto;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .tree.os-drag-over {
+      border-color: var(--green);
+      background: rgba(63, 185, 80, 0.06);
+    }
+
+    .tree-node {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      margin: 2px 0;
+      font-size: 13px;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+
+    .tree-node:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .tree-node.drag-over {
+      border-color: var(--blue);
+      background: var(--blue-bg);
+    }
+
+    .tree-node.dragging {
+      opacity: 0.45;
+    }
+
+    .node-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .node-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12.5px;
+    }
+
+    .status-existing {
+      color: var(--blue);
+      background: var(--blue-bg);
+      border-color: rgba(88, 166, 255, 0.35);
+    }
+
+    .status-new {
+      color: var(--green);
+      background: var(--green-bg);
+      border-color: rgba(63, 185, 80, 0.35);
+    }
+
+    .tag {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 999px;
+      flex-shrink: 0;
+    }
+
+    .tag-blue {
+      color: var(--blue);
+      background: var(--blue-bg);
+    }
+
+    .tag-green {
+      color: var(--green);
+      background: var(--green-bg);
+    }
+
+    .node-actions {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .node-actions button {
+      padding: 3px 7px;
+      font-size: 11px;
+    }
+
+    .log {
+      margin-top: 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      max-height: 180px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+
+    .log-ok { color: var(--green); }
+    .log-err { color: var(--danger); }
+    .log-info { color: var(--blue); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>GitHub Repo Tree Preview &amp; Pusher</h1>
+    <div class="legend">
+      <span><span class="badge-dot dot-blue"></span>Existing Repo File (Blue)</span>
+      <span><span class="badge-dot dot-green"></span>New Local / Tree File (Green)</span>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Left Column: Credentials & Repo Settings -->
+    <div class="card">
+      <h2>Repository &amp; Auth</h2>
+
+      <div class="row-2">
+        <div class="field">
+          <label for="owner">Repo Owner (User / Org)</label>
+          <input id="owner" type="text" placeholder="octocat" />
+        </div>
+        <div class="field">
+          <label for="repo">Repository Name</label>
+          <input id="repo" type="text" placeholder="my-repo" />
+        </div>
+      </div>
+
+      <div class="row-2">
+        <div class="field">
+          <label for="branch">Branch</label>
+          <input id="branch" type="text" value="main" />
+        </div>
+        <div class="field">
+          <label for="commitMsg">Commit Message</label>
+          <input id="commitMsg" type="text" value="Update files from tree preview" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="pat">GitHub Personal Access Token (PAT)</label>
+        <input id="pat" type="password" placeholder="github_pat_... or ghp_..." autocomplete="off" />
+      </div>
+
+      <div class="field">
+        <label for="sshKey">SSH Private Key (Optional / Stored for Reference)</label>
+        <textarea id="sshKey" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----"></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button id="loadRepoBtn" type="button">Load Existing Repo Files</button>
+        <button id="pushBtn" class="primary" type="button">Push Preview to GitHub</button>
+      </div>
+
+      <div class="note">
+        <strong>Important note on SSH vs. PAT:</strong> Standard web browsers cannot execute raw SSH/Git wire protocol connections directly without a local helper or backend proxy. This page uses your <strong>GitHub PAT</strong> against the GitHub REST/Git Data API to push commits, while preserving your <strong>SSH Key</strong> input field if you connect it to a custom backend/relay.
+      </div>
+    </div>
+
+    <!-- Right Column: Interactive Tree Preview -->
+    <div class="card">
+      <h2>Interactive File &amp; Folder Preview</h2>
+
+      <div class="preview-toolbar">
+        <button id="toggleTreePasteBtn" type="button">Paste File Tree</button>
+
+        <input id="fileInput" type="file" multiple style="display:none;" />
+        <button id="pickFilesBtn" type="button">+ Add Files</button>
+
+        <input id="folderInput" type="file" webkitdirectory directory multiple style="display:none;" />
+        <button id="pickFolderBtn" type="button">+ Add Folder</button>
+
+        <button id="newFolderBtn" type="button">+ New Folder</button>
+        <button id="clearNewBtn" type="button">Remove New Items</button>
+        <button id="resetAllBtn" class="danger" type="button">Clear Preview</button>
+      </div>
+
+      <div id="treePasteBox" class="tree-paste-box">
+        <label for="treePasteInput">Paste an ASCII/Unicode file tree (folders, files, inline notes, or shorthands like <code>index.html, .js, .css</code>):</label>
+        <textarea id="treePasteInput" placeholder="toolkit/&#10;├── package.json&#10;├── src/&#10;│   └── index.ts&#10;└── public/tools/timestamp/   index.html, .js, .css"></textarea>
+        <div class="btn-row" style="margin-top:0;">
+          <button id="applyTreeBtn" class="primary" type="button">Arrange Tree in Preview</button>
+          <button id="closeTreePasteBtn" type="button">Close</button>
+        </div>
+      </div>
+
+      <div id="rootDropzone" class="root-dropzone">
+        Drop any preview item here to move it to <strong>root (/)</strong>, or drag folders/files from your computer into the tree below.
+      </div>
+
+      <div id="treeContainer" class="tree"></div>
+
+      <div id="logBox" class="log"><span class="log-info">Ready. Paste a file tree to auto-arrange files/folders, add files or full folders, or load existing repo files.</span></div>
+    </div>
+  </div>
+
+  <script>
+    let items = [];
+    let draggedId = null;
+
+    const el = {
+      owner: document.getElementById("owner"),
+      repo: document.getElementById("repo"),
+      branch: document.getElementById("branch"),
+      commitMsg: document.getElementById("commitMsg"),
+      pat: document.getElementById("pat"),
+      sshKey: document.getElementById("sshKey"),
+      toggleTreePasteBtn: document.getElementById("toggleTreePasteBtn"),
+      treePasteBox: document.getElementById("treePasteBox"),
+      treePasteInput: document.getElementById("treePasteInput"),
+      applyTreeBtn: document.getElementById("applyTreeBtn"),
+      closeTreePasteBtn: document.getElementById("closeTreePasteBtn"),
+      fileInput: document.getElementById("fileInput"),
+      folderInput: document.getElementById("folderInput"),
+      pickFilesBtn: document.getElementById("pickFilesBtn"),
+      pickFolderBtn: document.getElementById("pickFolderBtn"),
+      newFolderBtn: document.getElementById("newFolderBtn"),
+      clearNewBtn: document.getElementById("clearNewBtn"),
+      resetAllBtn: document.getElementById("resetAllBtn"),
+      loadRepoBtn: document.getElementById("loadRepoBtn"),
+      pushBtn: document.getElementById("pushBtn"),
+      rootDropzone: document.getElementById("rootDropzone"),
+      treeContainer: document.getElementById("treeContainer"),
+      logBox: document.getElementById("logBox")
+    };
+
+    function log(msg, level = "info") {
+      const time = new Date().toLocaleTimeString();
+      const span = document.createElement("div");
+      span.className = level === "ok" ? "log-ok" : level === "err" ? "log-err" : "log-info";
+      span.textContent = `[${time}] ${msg}`;
+      el.logBox.appendChild(span);
+      el.logBox.scrollTop = el.logBox.scrollHeight;
+    }
+
+    function uid() {
+      return "id_" + Math.random().toString(36).slice(2, 10);
+    }
+
+    function normalizePath(p) {
+      return String(p || "")
+        .replace(/\\/g, "/")
+        .replace(/^\/+|\/+$/g, "")
+        .replace(/\/+/g, "/");
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = String(reader.result || "");
+          const commaIdx = result.indexOf(",");
+          resolve(commaIdx >= 0 ? result.slice(commaIdx + 1) : "");
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function ensureFolder(folderPath, source = "new") {
+      const clean = normalizePath(folderPath);
+      if (!clean) return;
+      const parts = clean.split("/");
+      let acc = "";
+      for (const part of parts) {
+        acc = acc ? `${acc}/${part}` : part;
+        const existing = items.find(it => it.type === "folder" && it.path === acc);
+        if (!existing) {
+          items.push({
+            id: uid(),
+            path: acc,
+            type: "folder",
+            source
+          });
+        } else if (source === "new") {
+          existing.source = "new";
+        }
+      }
+    }
+
+    function ensureAncestorFolders(filePath, source = "new") {
+      const parts = normalizePath(filePath).split("/");
+      parts.pop();
+      if (parts.length > 0) {
+        ensureFolder(parts.join("/"), source);
+      }
+    }
+
+    function upsertNewFile(relPath, base64Content = "") {
+      const cleanPath = normalizePath(relPath);
+      if (!cleanPath) return;
+      ensureAncestorFolders(cleanPath, "new");
+
+      const existingRepoFile = items.find(
+        it => it.type === "file" && it.path === cleanPath && it.source === "existing"
+      );
+      if (existingRepoFile) {
+        if (base64Content) {
+          existingRepoFile.source = "new";
+          existingRepoFile.contentBase64 = base64Content;
+        }
+        return;
+      }
+
+      const idx = items.findIndex(it => it.type === "file" && it.path === cleanPath);
+      if (idx >= 0) {
+        items[idx] = {
+          ...items[idx],
+          path: cleanPath,
+          type: "file",
+          source: "new",
+          contentBase64: base64Content || items[idx].contentBase64 || ""
+        };
+      } else {
+        items.push({
+          id: uid(),
+          path: cleanPath,
+          type: "file",
+          source: "new",
+          contentBase64: base64Content
+        });
+      }
+    }
+
+    // Parse an ASCII/Unicode file tree text block into folders & files
+    function parseTreeText(rawText) {
+      const lines = String(rawText || "").split(/\r?\n/);
+      const parsedFolders = new Set();
+      const parsedFiles = new Set();
+
+      // Measure visual indentation width before the node label
+      function getIndentDepth(rawLine) {
+        const match = rawLine.match(/^([│\s]*)(?:├──|└──)?\s*(.*)$/);
+        if (!match) return { depth: 0, rest: rawLine.trim() };
+        const prefix = match[1] || "";
+        const hasConnector = /(?:├──|└──)/.test(rawLine);
+        // Each tree level is typically 4 chars ("│   " or "    ") + 4 chars for "├── "
+        const visualWidth = prefix.length + (hasConnector ? 4 : 0);
+        const depth = Math.round(visualWidth / 4);
+        return { depth, rest: match[2] || "" };
+      }
+
+      // Clean trailing descriptions/annotations (e.g. "file.ts   router, security headers")
+      function splitNameAndNote(rest) {
+        const trimmed = rest.trim();
+        if (!trimmed) return { tokenPart: "", notePart: "" };
+
+        // Split on 2+ spaces first, or a trailing parenthetical comment
+        const multiSpaceMatch = trimmed.match(/^(.+?)\s{2,}(.+)$/);
+        if (multiSpaceMatch) {
+          return {
+            tokenPart: multiSpaceMatch[1].trim(),
+            notePart: multiSpaceMatch[2].trim()
+          };
+        }
+
+        const parenMatch = trimmed.match(/^([^\s]+(?:\s*,\s*\.?[A-Za-z0-9_-]+)*)\s+(\(.+\))$/);
+        if (parenMatch) {
+          return {
+            tokenPart: parenMatch[1].trim(),
+            notePart: parenMatch[2].trim()
+          };
+        }
+
+        return { tokenPart: trimmed, notePart: "" };
+      }
+
+      const stack = []; // stack of folder paths indexed by depth
+      let rootWrapperToStrip = "";
+
+      lines.forEach((rawLine, lineIdx) => {
+        if (!rawLine.trim()) return;
+        const { depth, rest } = getIndentDepth(rawLine);
+        const { tokenPart, notePart } = splitNameAndNote(rest);
+        if (!tokenPart) return;
+
+        // Detect top-level root wrapper folder like "toolkit/" on the first non-empty line
+        if (lineIdx === 0 && depth === 0 && tokenPart.endsWith("/")) {
+          rootWrapperToStrip = normalizePath(tokenPart);
+          stack.length = 0;
+          return;
+        }
+
+        // Trim stack to current depth
+        while (stack.length > depth) {
+          stack.pop();
+        }
+
+        const parentPath = stack.length > 0 ? stack[stack.length - 1] : "";
+        const cleanToken = normalizePath(tokenPart);
+
+        // Handle shorthand like "index.html, .js, .css"
+        if (tokenPart.includes(",")) {
+          const folderName = cleanToken.split("/").pop() || "";
+          const parts = tokenPart.split(",").map(s => s.trim()).filter(Boolean);
+          for (const part of parts) {
+            if (part.startsWith(".")) {
+              const fileName = folderName ? `${folderName}${part}` : part;
+              const fullFile = normalizePath(parentPath ? `${parentPath}/${fileName}` : fileName);
+              parsedFiles.add(fullFile);
+            } else {
+              const fullFile = normalizePath(parentPath ? `${parentPath}/${part}` : part);
+              parsedFiles.add(fullFile);
+            }
+          }
+          return;
+        }
+
+        const isExplicitFolder = tokenPart.endsWith("/") || Boolean(notePart && /\b\d+\s+\.[a-z0-9]+\b/i.test(notePart));
+        const hasExtension = /\.[A-Za-z0-9_-]+$/.test(cleanToken) && !cleanToken.startsWith(".");
+
+        if (isExplicitFolder || (!hasExtension && !cleanToken.startsWith("."))) {
+          const fullFolder = normalizePath(parentPath ? `${parentPath}/${cleanToken}` : cleanToken);
+          if (fullFolder) {
+            parsedFolders.add(fullFolder);
+            stack[depth] = fullFolder;
+
+            // If note mentions additional files like "+ the 4 .woff2 files you add", add a sample placeholder
+            const extraExtMatch = notePart.match(/\+\s+.*?\s+(\.[A-Za-z0-9_-]+)/i);
+            if (extraExtMatch) {
+              parsedFiles.add(normalizePath(`${fullFolder}/font${extraExtMatch[1]}`));
+            }
+          }
+        } else {
+          const fullFile = normalizePath(parentPath ? `${parentPath}/${cleanToken}` : cleanToken);
+          if (fullFile) {
+            parsedFiles.add(fullFile);
+          }
+        }
+      });
+
+      function stripRoot(p) {
+        if (!rootWrapperToStrip) return normalizePath(p);
+        if (p === rootWrapperToStrip) return "";
+        if (p.startsWith(rootWrapperToStrip + "/")) {
+          return normalizePath(p.slice(rootWrapperToStrip.length + 1));
+        }
+        return normalizePath(p);
+      }
+
+      const finalFolders = Array.from(parsedFolders).map(stripRoot).filter(Boolean);
+      const finalFiles = Array.from(parsedFiles).map(stripRoot).filter(Boolean);
+
+      return { folders: finalFolders, files: finalFiles };
+    }
+
+    el.toggleTreePasteBtn.addEventListener("click", () => {
+      el.treePasteBox.classList.toggle("open");
+      if (el.treePasteBox.classList.contains("open")) {
+        el.treePasteInput.focus();
+      }
+    });
+
+    el.closeTreePasteBtn.addEventListener("click", () => {
+      el.treePasteBox.classList.remove("open");
+    });
+
+    el.applyTreeBtn.addEventListener("click", () => {
+      const text = el.treePasteInput.value;
+      if (!text.trim()) {
+        log("Paste a file tree first.", "err");
+        return;
+      }
+
+      const { folders, files } = parseTreeText(text);
+
+      // Map any already-loaded new files by basename if they match a parsed file path
+      const existingNewFilesByName = new Map();
+      for (const it of items) {
+        if (it.type === "file" && it.source === "new") {
+          const base = it.path.split("/").pop();
+          if (!existingNewFilesByName.has(base)) {
+            existingNewFilesByName.set(base, []);
+          }
+          existingNewFilesByName.get(base).push(it);
+        }
+      }
+
+      for (const fPath of folders) {
+        ensureFolder(fPath, "new");
+      }
+
+      for (const filePath of files) {
+        ensureAncestorFolders(filePath, "new");
+        const baseName = filePath.split("/").pop();
+        const candidates = existingNewFilesByName.get(baseName);
+        if (candidates && candidates.length > 0) {
+          const matched = candidates.shift();
+          matched.path = filePath;
+        } else {
+          upsertNewFile(filePath, "");
+        }
+      }
+
+      log(`Arranged ${folders.length} folder(s) and ${files.length} file(s) from pasted tree.`, "ok");
+      renderTree();
+    });
+
+    async function ingestFileList(fileList, prefix = "") {
+      const files = Array.from(fileList || []);
+      if (!files.length) return 0;
+
+      const cleanPrefix = normalizePath(prefix);
+      let added = 0;
+
+      for (const file of files) {
+        const rawRel = normalizePath(file.webkitRelativePath || file.name);
+        const fullPath = cleanPrefix ? `${cleanPrefix}/${rawRel}` : rawRel;
+        const base64 = await fileToBase64(file);
+        upsertNewFile(fullPath, base64);
+        added++;
+      }
+
+      return added;
+    }
+
+    function readAllDirectoryEntries(dirReader) {
+      return new Promise((resolve, reject) => {
+        const entries = [];
+        function readBatch() {
+          dirReader.readEntries(batch => {
+            if (!batch.length) {
+              resolve(entries);
+            } else {
+              entries.push(...batch);
+              readBatch();
+            }
+          }, reject);
+        }
+        readBatch();
+      });
+    }
+
+    function getEntryFile(fileEntry) {
+      return new Promise((resolve, reject) => {
+        fileEntry.file(resolve, reject);
+      });
+    }
+
+    async function ingestDroppedEntry(entry, basePrefix = "") {
+      const cleanPrefix = normalizePath(basePrefix);
+      const entryPath = normalizePath(cleanPrefix ? `${cleanPrefix}/${entry.name}` : entry.name);
+
+      if (entry.isFile) {
+        const file = await getEntryFile(entry);
+        const base64 = await fileToBase64(file);
+        upsertNewFile(entryPath, base64);
+        return 1;
+      }
+
+      if (entry.isDirectory) {
+        ensureFolder(entryPath, "new");
+        const reader = entry.createReader();
+        const children = await readAllDirectoryEntries(reader);
+        let fileCount = 0;
+        for (const child of children) {
+          fileCount += await ingestDroppedEntry(child, entryPath);
+        }
+        return fileCount;
+      }
+
+      return 0;
+    }
+
+    async function ingestDataTransferItems(dataTransfer, targetFolder = "") {
+      const dtItems = Array.from(dataTransfer.items || []);
+      const entries = dtItems
+        .map(it => (typeof it.webkitGetAsEntry === "function" ? it.webkitGetAsEntry() : null))
+        .filter(Boolean);
+
+      if (entries.length > 0) {
+        let totalFiles = 0;
+        for (const entry of entries) {
+          totalFiles += await ingestDroppedEntry(entry, targetFolder);
+        }
+        return totalFiles;
+      }
+
+      return await ingestFileList(dataTransfer.files, targetFolder);
+    }
+
+    function dissolveFolderMoveUp(folderPath) {
+      const targetFolder = normalizePath(folderPath);
+      if (!targetFolder) return;
+
+      const parts = targetFolder.split("/");
+      parts.pop();
+      const parentFolder = parts.join("/");
+      const prefix = targetFolder + "/";
+
+      items = items.filter(it => !(it.type === "folder" && it.path === targetFolder));
+
+      let movedCount = 0;
+      for (const it of items) {
+        if (it.path.startsWith(prefix)) {
+          const remainder = it.path.slice(prefix.length);
+          const nextPath = normalizePath(parentFolder ? `${parentFolder}/${remainder}` : remainder);
+          it.path = nextPath;
+          movedCount++;
+        }
+      }
+
+      const seen = new Set();
+      items = items.filter(it => {
+        const key = `${it.type}:${it.path}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      log(
+        `Removed folder "${targetFolder}" and moved ${movedCount} item(s) up to "${parentFolder || "/"}".`,
+        "ok"
+      );
+      renderTree();
+    }
+
+    el.pickFilesBtn.addEventListener("click", () => el.fileInput.click());
+    el.pickFolderBtn.addEventListener("click", () => el.folderInput.click());
+
+    el.fileInput.addEventListener("change", async (e) => {
+      const count = await ingestFileList(e.target.files);
+      e.target.value = "";
+      if (count > 0) {
+        log(`Added ${count} file(s) in green.`, "ok");
+        renderTree();
+      }
+    });
+
+    el.folderInput.addEventListener("change", async (e) => {
+      const count = await ingestFileList(e.target.files);
+      e.target.value = "";
+      if (count > 0) {
+        log(`Added folder hierarchy with ${count} file(s) preserved (no flattening).`, "ok");
+        renderTree();
+      }
+    });
+
+    el.newFolderBtn.addEventListener("click", () => {
+      const raw = prompt("Enter folder path (e.g., docs or src/components/ui):");
+      if (!raw) return;
+      const folderPath = normalizePath(raw);
+      if (!folderPath) return;
+      ensureFolder(folderPath, "new");
+      log(`Added folder "${folderPath}" in green.`, "ok");
+      renderTree();
+    });
+
+    el.clearNewBtn.addEventListener("click", () => {
+      items = items.filter(it => it.source !== "new");
+      renderTree();
+    });
+
+    el.resetAllBtn.addEventListener("click", () => {
+      items = [];
+      renderTree();
+    });
+
+    function moveItemToFolder(itemId, targetFolderPath) {
+      const target = normalizePath(targetFolderPath);
+      const item = items.find(i => i.id === itemId);
+      if (!item) return;
+
+      const oldPath = item.path;
+      const baseName = oldPath.split("/").pop();
+      const nextPath = target ? `${target}/${baseName}` : baseName;
+
+      if (nextPath === oldPath) return;
+
+      if (item.type === "folder" && (nextPath === oldPath || nextPath.startsWith(oldPath + "/"))) {
+        log("Cannot move a folder inside itself.", "err");
+        return;
+      }
+
+      if (item.type === "folder") {
+        items.forEach(it => {
+          if (it.path === oldPath) {
+            it.path = nextPath;
+          } else if (it.path.startsWith(oldPath + "/")) {
+            it.path = nextPath + it.path.slice(oldPath.length);
+          }
+        });
+        ensureFolder(nextPath, item.source);
+      } else {
+        item.path = nextPath;
+        ensureAncestorFolders(nextPath, item.source);
+      }
+      renderTree();
+    }
+
+    function reorderSiblings(sourceId, targetId) {
+      if (sourceId === targetId) return;
+      const srcIdx = items.findIndex(i => i.id === sourceId);
+      const tgtIdx = items.findIndex(i => i.id === targetId);
+      if (srcIdx < 0 || tgtIdx < 0) return;
+
+      const [moved] = items.splice(srcIdx, 1);
+      const newTgtIdx = items.findIndex(i => i.id === targetId);
+      items.splice(newTgtIdx, 0, moved);
+      renderTree();
+    }
+
+    function buildHierarchy() {
+      const root = { name: "", path: "", type: "folder", childrenFolders: [], childrenFiles: [] };
+      const folderMap = new Map();
+      folderMap.set("", root);
+
+      const folders = items.filter(i => i.type === "folder");
+      for (const f of folders) {
+        const parts = f.path.split("/");
+        let acc = "";
+        for (const part of parts) {
+          const parentPath = acc;
+          acc = acc ? `${acc}/${part}` : part;
+          if (!folderMap.has(acc)) {
+            const node = {
+              id: f.path === acc ? f.id : uid(),
+              name: part,
+              path: acc,
+              type: "folder",
+              source: f.source || "existing",
+              childrenFolders: [],
+              childrenFiles: []
+            };
+            folderMap.set(acc, node);
+            folderMap.get(parentPath).childrenFolders.push(node);
+          }
+        }
+      }
+
+      const files = items.filter(i => i.type === "file");
+      for (const fl of files) {
+        const parts = fl.path.split("/");
+        const fileName = parts.pop();
+        const parentPath = parts.join("/");
+        if (!folderMap.has(parentPath)) {
+          ensureFolder(parentPath, fl.source);
+          return buildHierarchy();
+        }
+        folderMap.get(parentPath).childrenFiles.push({
+          ...fl,
+          name: fileName
+        });
+      }
+
+      return root;
+    }
+
+    function renderTree() {
+      el.treeContainer.innerHTML = "";
+      const root = buildHierarchy();
+
+      if (root.childrenFolders.length === 0 && root.childrenFiles.length === 0) {
+        el.treeContainer.innerHTML = `<div style="color:var(--muted); font-size:13px; padding:12px;">No files or folders in preview yet. Click "Paste File Tree", add files/folders, or load existing repo files.</div>`;
+        return;
+      }
+
+      function renderNode(node, depth) {
+        const row = document.createElement("div");
+        const isExisting = node.source === "existing";
+        const colorClass = isExisting ? "status-existing" : "status-new";
+
+        row.className = `tree-node ${colorClass}`;
+        row.style.marginLeft = `${depth * 18}px`;
+        row.draggable = true;
+        row.dataset.id = node.id;
+
+        row.addEventListener("dragstart", (e) => {
+          draggedId = node.id;
+          row.classList.add("dragging");
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", node.id);
+        });
+
+        row.addEventListener("dragend", () => {
+          draggedId = null;
+          row.classList.remove("dragging");
+          document.querySelectorAll(".drag-over").forEach(n => n.classList.remove("drag-over"));
+        });
+
+        row.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          row.classList.add("drag-over");
+        });
+
+        row.addEventListener("dragleave", () => {
+          row.classList.remove("drag-over");
+        });
+
+        row.addEventListener("drop", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          row.classList.remove("drag-over");
+          el.treeContainer.classList.remove("os-drag-over");
+
+          const srcId = draggedId || e.dataTransfer.getData("text/plain");
+          if (srcId) {
+            if (srcId === node.id) return;
+            if (node.type === "folder") {
+              moveItemToFolder(srcId, node.path);
+            } else {
+              const draggedItem = items.find(i => i.id === srcId);
+              const targetItem = items.find(i => i.id === node.id);
+              if (!draggedItem || !targetItem) return;
+
+              const srcParent = draggedItem.path.includes("/")
+                ? draggedItem.path.slice(0, draggedItem.path.lastIndexOf("/"))
+                : "";
+              const tgtParent = targetItem.path.includes("/")
+                ? targetItem.path.slice(0, targetItem.path.lastIndexOf("/"))
+                : "";
+
+              if (srcParent !== tgtParent) {
+                moveItemToFolder(srcId, tgtParent);
+              } else {
+                reorderSiblings(srcId, node.id);
+              }
+            }
+            return;
+          }
+
+          const dropTarget = node.type === "folder"
+            ? node.path
+            : (node.path.includes("/") ? node.path.slice(0, node.path.lastIndexOf("/")) : "");
+          const added = await ingestDataTransferItems(e.dataTransfer, dropTarget);
+          if (added > 0 || node.type === "folder") {
+            log(`Imported ${added} file(s) into "${dropTarget || "/"}" preserving folder structure.`, "ok");
+            renderTree();
+          }
+        });
+
+        const left = document.createElement("div");
+        left.className = "node-left";
+
+        const icon = document.createElement("span");
+        icon.textContent = node.type === "folder" ? "📁" : "📄";
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "node-name";
+        nameSpan.textContent = node.name;
+        nameSpan.title = node.path;
+
+        left.appendChild(icon);
+        left.appendChild(nameSpan);
+
+        const tag = document.createElement("span");
+        tag.className = `tag ${isExisting ? "tag-blue" : "tag-green"}`;
+        tag.textContent = isExisting ? "Existing" : "New";
+        left.appendChild(tag);
+
+        const actions = document.createElement("div");
+        actions.className = "node-actions";
+
+        if (node.path.includes("/")) {
+          const pullBtn = document.createElement("button");
+          pullBtn.type = "button";
+          pullBtn.textContent = "Pull Out";
+          pullBtn.title = "Move one level up";
+          pullBtn.onclick = (ev) => {
+            ev.stopPropagation();
+            const parts = node.path.split("/");
+            parts.pop();
+            parts.pop();
+            moveItemToFolder(node.id, parts.join("/"));
+          };
+          actions.appendChild(pullBtn);
+        }
+
+        const renameBtn = document.createElement("button");
+        renameBtn.type = "button";
+        renameBtn.textContent = "Rename";
+        renameBtn.onclick = (ev) => {
+          ev.stopPropagation();
+          const updated = prompt("New path for item:", node.path);
+          if (!updated) return;
+          const clean = normalizePath(updated);
+          if (!clean || clean === node.path) return;
+          const target = items.find(i => i.id === node.id);
+          if (!target) return;
+
+          if (target.type === "folder") {
+            const oldP = target.path;
+            items.forEach(it => {
+              if (it.path === oldP) it.path = clean;
+              else if (it.path.startsWith(oldP + "/")) it.path = clean + it.path.slice(oldP.length);
+            });
+            ensureFolder(clean, target.source);
+          } else {
+            target.path = clean;
+            ensureAncestorFolders(clean, target.source);
+          }
+          renderTree();
+        };
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "danger";
+        delBtn.textContent = node.type === "folder" ? "Ungroup" : "Remove";
+        delBtn.title = node.type === "folder"
+          ? "Remove folder and move its contents one level up"
+          : "Remove file from preview";
+        delBtn.onclick = (ev) => {
+          ev.stopPropagation();
+          if (node.type === "folder") {
+            dissolveFolderMoveUp(node.path);
+          } else {
+            items = items.filter(i => i.id !== node.id);
+            renderTree();
+          }
+        };
+
+        actions.appendChild(renameBtn);
+        actions.appendChild(delBtn);
+
+        row.appendChild(left);
+        row.appendChild(actions);
+        el.treeContainer.appendChild(row);
+
+        if (node.type === "folder") {
+          for (const subF of node.childrenFolders) {
+            renderNode(subF, depth + 1);
+          }
+          for (const subFile of node.childrenFiles) {
+            renderNode(subFile, depth + 1);
+          }
+        }
+      }
+
+      for (const f of root.childrenFolders) {
+        renderNode(f, 0);
+      }
+      for (const fl of root.childrenFiles) {
+        renderNode(fl, 0);
+      }
+    }
+
+    el.rootDropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      el.rootDropzone.classList.add("drag-over");
+    });
+
+    el.rootDropzone.addEventListener("dragleave", () => {
+      el.rootDropzone.classList.remove("drag-over");
+    });
+
+    el.rootDropzone.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      el.rootDropzone.classList.remove("drag-over");
+      const srcId = draggedId || e.dataTransfer.getData("text/plain");
+      if (srcId) {
+        moveItemToFolder(srcId, "");
+        return;
+      }
+      const added = await ingestDataTransferItems(e.dataTransfer, "");
+      if (added > 0) {
+        log(`Imported ${added} file(s) into root (/) preserving folder structure.`, "ok");
+        renderTree();
+      }
+    });
+
+    el.treeContainer.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (!draggedId) {
+        el.treeContainer.classList.add("os-drag-over");
+      }
+    });
+
+    el.treeContainer.addEventListener("dragleave", (e) => {
+      if (!el.treeContainer.contains(e.relatedTarget)) {
+        el.treeContainer.classList.remove("os-drag-over");
+      }
+    });
+
+    el.treeContainer.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      el.treeContainer.classList.remove("os-drag-over");
+      if (draggedId) return;
+      const added = await ingestDataTransferItems(e.dataTransfer, "");
+      if (added > 0) {
+        log(`Imported ${added} file(s) from dropped folder(s) without flattening.`, "ok");
+        renderTree();
+      }
+    });
+
+    async function ghRequest(url, pat, method = "GET", body = null) {
+      const headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+      };
+      if (pat) {
+        headers["Authorization"] = `Bearer ${pat}`;
+      }
+      if (body !== null) {
+        headers["Content-Type"] = "application/json";
+      }
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: body !== null ? JSON.stringify(body) : null
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`GitHub API ${res.status}: ${text}`);
+      }
+      return res.json();
+    }
+
+    el.loadRepoBtn.addEventListener("click", async () => {
+      const owner = el.owner.value.trim();
+      const repo = el.repo.value.trim();
+      const branch = el.branch.value.trim() || "main";
+      const pat = el.pat.value.trim();
+
+      if (!owner || !repo) {
+        log("Please enter both Repo Owner and Repository Name.", "err");
+        return;
+      }
+
+      try {
+        log(`Fetching existing files from ${owner}/${repo}@${branch}...`);
+        const refData = await ghRequest(
+          `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/heads/${encodeURIComponent(branch)}`,
+          pat
+        );
+        const commitSha = refData.object.sha;
+        const commitData = await ghRequest(
+          `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/commits/${commitSha}`,
+          pat
+        );
+        const treeSha = commitData.tree.sha;
+        const treeData = await ghRequest(
+          `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${treeSha}?recursive=1`,
+          pat
+        );
+
+        const newItems = items.filter(i => i.source === "new");
+        items = [...newItems];
+
+        let count = 0;
+        for (const entry of treeData.tree || []) {
+          const cleanPath = normalizePath(entry.path);
+          if (entry.type === "tree") {
+            if (!items.some(i => i.type === "folder" && i.path === cleanPath)) {
+              items.push({
+                id: uid(),
+                path: cleanPath,
+                type: "folder",
+                source: "existing"
+              });
+            }
+          } else if (entry.type === "blob") {
+            ensureAncestorFolders(cleanPath, "existing");
+            if (!items.some(i => i.type === "file" && i.path === cleanPath)) {
+              items.push({
+                id: uid(),
+                path: cleanPath,
+                type: "file",
+                source: "existing",
+                sha: entry.sha
+              });
+              count++;
+            }
+          }
+        }
+
+        log(`Loaded ${count} existing file(s) in blue.`, "ok");
+        renderTree();
+      } catch (err) {
+        log(err.message, "err");
+      }
+    });
+
+    el.pushBtn.addEventListener("click", async () => {
+      const owner = el.owner.value.trim();
+      const repo = el.repo.value.trim();
+      const branch = el.branch.value.trim() || "main";
+      const message = el.commitMsg.value.trim() || "Update repository files";
+      const pat = el.pat.value.trim();
+
+      if (!owner || !repo || !pat) {
+        log("Owner, Repository Name, and GitHub PAT are required to push.", "err");
+        return;
+      }
+
+      const fileItems = items.filter(i => i.type === "file");
+      if (!fileItems.length) {
+        log("No files in preview to push.", "err");
+        return;
+      }
+
+      el.pushBtn.disabled = true;
+      try {
+        log(`Starting push to ${owner}/${repo} (${branch})...`);
+
+        const refData = await ghRequest(
+          `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/heads/${encodeURIComponent(branch)}`,
+          pat
+        );
+        const latestCommitSha = refData.object.sha;
+        const latestCommit = await ghRequest(
+          `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/commits/${latestCommitSha}`,
+          pat
+        );
+        const baseTreeSha = latestCommit.tree.sha;
+
+        const treeEntries = [];
+        for (const f of fileItems) {
+          const cleanPath = normalizePath(f.path);
+          if (f.source === "new") {
+            const blob = await ghRequest(
+              `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/blobs`,
+              pat,
+              "POST",
+              {
+                content: f.contentBase64 || "",
+                encoding: "base64"
+              }
+            );
+            treeEntries.push({
+              path: cleanPath,
+              mode: "100644",
+              type: "blob",
+              sha: blob.sha
+            });
+          } else if (f.sha) {
+            treeEntries.push({
+              path: cleanPath,
+              mode: "100644",
+              type: "blob",
+              sha: f.sha
+            });
+          }
+        }
+
+        const newTree = await ghRequest(
+          `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees`,
+          pat,
+          "POST",
+          {
+            base_tree: baseTreeSha,
+            tree: treeEntries
+          }
+        );
+
+        const newCommit = await ghRequest(
+          `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/commits`,
+          pat,
+          "POST",
+          {
+            message,
+            tree: newTree.sha,
+            parents: [latestCommitSha]
+          }
+        );
+
+        await ghRequest(
+          `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/refs/heads/${encodeURIComponent(branch)}`,
+          pat,
+          "PATCH",
+          {
+            sha: newCommit.sha
+          }
+        );
+
+        items.forEach(it => {
+          if (it.source === "new") {
+            it.source = "existing";
+            delete it.contentBase64;
+          }
+        });
+
+        log(`Success! Pushed commit ${newCommit.sha.slice(0, 7)} to ${branch}.`, "ok");
+        renderTree();
+      } catch (err) {
+        log(err.message, "err");
+      } finally {
+        el.pushBtn.disabled = false;
+      }
+    });
+
+    renderTree();
+  </script>
+</body>
+</html>
